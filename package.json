@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "db:migrate": "tsx src/db/migrate.ts",
+    "dev:material": "node scripts/generate-dev-material.mjs",
     "test": "vitest run"
   },
   "dependencies": {

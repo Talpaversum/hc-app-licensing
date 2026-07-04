@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${LICENSING_POSTGRES_USER:-hc_licensing}
+      POSTGRES_PASSWORD: ${LICENSING_POSTGRES_PASSWORD:-hc_licensing_password}
+      POSTGRES_DB: ${LICENSING_POSTGRES_DB:-hc_app_licensing}
+    ports:
+      - "${LICENSING_POSTGRES_PUBLISHED_PORT:-5434}:5432"
+    volumes:
+      - licensing_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  licensing:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:22-bookworm-slim AS deps
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm ci
+
+        FROM deps AS build
+        COPY tsconfig.json ./
+        COPY src ./src
+        RUN npm run build
+
+        FROM node:22-bookworm-slim AS runtime
+        WORKDIR /app
+        ENV NODE_ENV=production
+        COPY package*.json ./
+        RUN npm ci --omit=dev && npm cache clean --force
+        COPY --from=build /app/dist ./dist
+        COPY --from=build /app/src/db/migrations ./dist/src/db/migrations
+        EXPOSE 4030
+        CMD ["sh", "-c", "node dist/src/db/migrate.js && node dist/src/server.js"]
+    image: hc-app-licensing:local
+    environment:
+      PORT: "4030"
+      DATABASE_URL: ${DATABASE_URL:-postgres://hc_licensing:hc_licensing_password@postgres:5432/hc_app_licensing}
+      ISSUER_BASE_URL: ${ISSUER_BASE_URL:-http://localhost:4030}
+      BACKCHANNEL_BASE_URL: ${BACKCHANNEL_BASE_URL:-http://host.docker.internal:4030}
+      AUTHOR_ID: ${AUTHOR_ID:?AUTHOR_ID is required}
+      AUTHOR_PRIVATE_JWK_JSON: ${AUTHOR_PRIVATE_JWK_JSON:?AUTHOR_PRIVATE_JWK_JSON is required}
+      AUTHOR_CERT_JWS: ${AUTHOR_CERT_JWS:?AUTHOR_CERT_JWS is required}
+      DCR_TRUSTED_CORE_JWKS_JSON: ${DCR_TRUSTED_CORE_JWKS_JSON:?DCR_TRUSTED_CORE_JWKS_JSON is required}
+      INSTALLATION_TOKEN_SECRET: ${INSTALLATION_TOKEN_SECRET:-installersecretinstallersecret}
+      INSTALLATION_TOKEN_ISSUER: ${INSTALLATION_TOKEN_ISSUER:-hekatoncheiros-core-installer}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${LICENSING_PUBLISHED_PORT:-4030}:4030"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4030/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  licensing_postgres_data:

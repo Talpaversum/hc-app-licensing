@@ -16,6 +16,14 @@ import {
 const app = Fastify({ logger: true });
 const config = loadConfig();
 
+app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
+  try {
+    done(null, Object.fromEntries(new URLSearchParams(String(body))));
+  } catch (error) {
+    done(error as Error);
+  }
+});
+
 const dcrSchema = z.object({
   software_statement: z.string().min(20),
   redirect_uris: z.array(z.string().url()).min(1),

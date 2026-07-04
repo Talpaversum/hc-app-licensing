@@ -5,6 +5,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4030),
   DATABASE_URL: z.string().min(1),
   ISSUER_BASE_URL: z.string().url(),
+  BACKCHANNEL_BASE_URL: z.string().url().optional(),
   AUTHOR_ID: z.string().min(3),
   AUTHOR_PRIVATE_JWK_JSON: z.string().min(2),
   AUTHOR_CERT_JWS: z.string().min(5),

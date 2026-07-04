@@ -17,13 +17,14 @@ function nowUnix() {
 
 export function discoveryMetadata() {
   const cfg = loadConfig();
+  const backchannelBaseUrl = cfg.BACKCHANNEL_BASE_URL ?? cfg.ISSUER_BASE_URL;
   return {
     issuer: cfg.ISSUER_BASE_URL,
     author_id: cfg.AUTHOR_ID,
     authorization_endpoint: `${cfg.ISSUER_BASE_URL}/oauth/authorize`,
-    token_endpoint: `${cfg.ISSUER_BASE_URL}/oauth/token`,
-    registration_endpoint: `${cfg.ISSUER_BASE_URL}/oauth/register`,
-    license_issue_endpoint: `${cfg.ISSUER_BASE_URL}/v1/licenses/issue`,
+    token_endpoint: `${backchannelBaseUrl}/oauth/token`,
+    registration_endpoint: `${backchannelBaseUrl}/oauth/register`,
+    license_issue_endpoint: `${backchannelBaseUrl}/v1/licenses/issue`,
   };
 }
 
