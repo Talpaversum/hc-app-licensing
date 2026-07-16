@@ -2,9 +2,9 @@
 
 Author-hosted licensing issuer for Hekatoncheiros apps.
 
-This service issues tenant licenses for apps owned by one author identity. It is
-not the app catalog, not the author registry, and not a normal customer Core
-service. It should be operated by the app author/vendor.
+This installable Hekatoncheiros application issues tenant licenses for apps
+owned by one author identity. It is not the app catalog or author registry. It
+is operated by the app author/vendor inside the vendor's Core instance.
 
 ## Role
 
@@ -15,6 +15,9 @@ service. It should be operated by the app author/vendor.
 - runs OAuth authorization code activation
 - issues signed `hc-license` tokens at `/v1/licenses/issue`
 - returns offline-compatible bundles with `license_jws` and `author_cert_jws`
+- manages products, customers, Core instances, grants, activations, and issued
+  licenses through a localized Core-hosted plugin
+- verifies Core-delegated users and records attributable audit events
 
 Core then verifies the chain offline:
 
@@ -106,10 +109,10 @@ Core container is not the host machine, so use a URL that Core can reach, such
 as a reverse proxy or Docker Desktop host address, and keep the manifest/catalog
 issuer URL aligned with that value.
 
-## Current Limitations
+## Authentication
 
-- The OAuth authorize endpoint is a development stub and does not perform real
-  user login or consent yet.
-- `/v1/licenses/revoke` is a stub.
-- Product/customer/grant administration UI is not implemented yet.
-- The service is single-author per deployment.
+Human administration uses Core identity and `licensing.*` RBAC permissions.
+The issuer has no local users, passwords, login forms, or sessions. Set
+`CORE_DELEGATION_JWKS_JSON` to Core's dedicated public delegation key set and
+`CORE_JWT_ISSUER` to the hosting Core issuer.
+The service remains single-author per deployment.

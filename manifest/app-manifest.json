@@ -1,0 +1,45 @@
+{
+  "app_id": "talpaversum/licensing",
+  "app_name": "Licensing Issuer",
+  "version": "0.2.0",
+  "vendor": { "name": "Talpaversum", "website": "https://github.com/Talpaversum" },
+  "tenancy": { "scope": "tenant", "cross_tenant_collaboration": { "supported": false, "shareables": [] } },
+  "data": { "schemas": ["licensing_issuer"], "no_cross_app_access": true },
+  "privileges": {
+    "required": ["licensing.audit.read"],
+    "optional": ["licensing.products.manage", "licensing.customers.manage", "licensing.instances.manage", "licensing.grants.manage", "licensing.licenses.issue", "licensing.licenses.revoke", "licensing.activations.approve"]
+  },
+  "licensing": {
+    "required": false,
+    "enforced_by_app": true,
+    "offline_supported": true,
+    "modes": ["perpetual", "time_limited"],
+    "expiry_behavior": { "non_destructive": true, "read_only": true, "api_read_only": true }
+  },
+  "localization": {
+    "contract_version": 1,
+    "default_locale": "en",
+    "supported_locales": ["en", "cs"],
+    "resources": [
+      { "locale": "en", "path": "locales/en.json", "format": "hc-flat-json-v1" },
+      { "locale": "cs", "path": "locales/cs.json", "format": "hc-flat-json-v1" }
+    ]
+  },
+  "integration": {
+    "slug": "licensing",
+    "api": { "exposes": { "base_path": "/apps/licensing", "version": "v1" }, "consumes_core_api": false },
+    "events": { "emits": [], "consumes": [], "idempotent_consumers": true },
+    "ui": {
+      "artifact": { "url": "/internal/ui/plugin.js", "auth": "core-signed-token" },
+      "nav_entries": [
+        { "label": "Dashboard", "path": "/app/licensing", "required_privileges": ["licensing.audit.read"] },
+        { "label": "Products", "path": "/app/licensing/products", "required_privileges": ["licensing.products.manage"] },
+        { "label": "Customers", "path": "/app/licensing/customers", "required_privileges": ["licensing.customers.manage"] },
+        { "label": "Activations", "path": "/app/licensing/activations", "required_privileges": ["licensing.activations.approve"] },
+        { "label": "Licenses", "path": "/app/licensing/licenses", "required_privileges": ["licensing.licenses.issue"] },
+        { "label": "Security", "path": "/app/licensing/security", "required_privileges": ["licensing.licenses.issue"] },
+        { "label": "Audit", "path": "/app/licensing/audit", "required_privileges": ["licensing.audit.read"] }
+      ]
+    }
+  }
+}

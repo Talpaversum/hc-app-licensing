@@ -1,4 +1,6 @@
 import Fastify from "fastify";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { jwtVerify } from "jose";
 import { z } from "zod";
 
@@ -12,6 +14,7 @@ import {
   listMigrationManifests,
   registerOAuthClient,
 } from "./licensing-service.js";
+import { registerManagementRoutes } from "./management-routes.js";
 
 const app = Fastify({ logger: true });
 const config = loadConfig();
@@ -59,6 +62,19 @@ const issueSchema = z.object({
 });
 
 app.get("/health", async () => ({ status: "ok" }));
+
+app.get("/internal/ui/plugin.js", async (request, reply) => {
+  const authHeader = String(request.headers["authorization"] ?? "");
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  try {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(config.INSTALLATION_TOKEN_SECRET), { issuer: config.INSTALLATION_TOKEN_ISSUER });
+    if (payload.purpose !== "ui-artifact-fetch") throw new Error("invalid purpose");
+  } catch {
+    return reply.code(403).send({ message: "invalid UI artifact token" });
+  }
+  reply.type("text/javascript; charset=utf-8");
+  return reply.send(await readFile(path.resolve(process.cwd(), "dist-plugin", "plugin.js"), "utf8"));
+});
 
 app.get("/.well-known/hc-licensing", async () => discoveryMetadata());
 
@@ -137,8 +153,10 @@ app.post("/v1/licenses/issue", async (request) => {
 });
 
 app.post("/v1/licenses/revoke", async () => {
-  return { status: "stub", message: "revoke endpoint not implemented yet" };
+  return { status: "deprecated", message: "Use the delegated management API." };
 });
+
+await registerManagementRoutes(app);
 
 app.listen({ port: config.PORT, host: "0.0.0.0" }).catch((error) => {
   app.log.error(error);

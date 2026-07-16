@@ -32,10 +32,12 @@ async function ensureDatabaseExists(): Promise<void> {
 async function run() {
   await ensureDatabaseExists();
 
-  const sql = await readFile(path.resolve(__dirname, "migrations", "001_init.sql"), "utf8");
   const pool = getPool();
   try {
-    await pool.query(sql);
+    for (const migration of ["001_init.sql", "002_management.sql"]) {
+      const sql = await readFile(path.resolve(__dirname, "migrations", migration), "utf8");
+      await pool.query(sql);
+    }
     console.log("hc-app-licensing migrations applied");
   } finally {
     await pool.end();

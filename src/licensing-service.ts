@@ -3,17 +3,14 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { SignJWT, createLocalJWKSet, importJWK, jwtVerify, type JWK, type JSONWebKeySet } from "jose";
+import { createLocalJWKSet, jwtVerify, type JSONWebKeySet } from "jose";
 
 import { loadConfig } from "./config.js";
 import { getPool } from "./db/pool.js";
+import { createActivation, issueApprovedActivation } from "./management-service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-function nowUnix() {
-  return Math.floor(Date.now() / 1000);
-}
 
 export function discoveryMetadata() {
   const cfg = loadConfig();
@@ -82,6 +79,10 @@ export async function issueAuthorizationCode(payload: {
   code_challenge?: string;
   code_challenge_method?: string;
 }) {
+  const client = await getPool().query("select redirect_uris,status from oauth_clients where client_id=$1 limit 1", [payload.client_id]);
+  if (!client.rowCount || client.rows[0].status !== "active") throw new Error("invalid_client");
+  const redirectUris = Array.isArray(client.rows[0].redirect_uris) ? client.rows[0].redirect_uris : [];
+  if (!redirectUris.includes(payload.redirect_uri)) throw new Error("invalid_redirect_uri");
   const code = `code_${randomUUID().replace(/-/g, "")}`;
   await getPool().query(
     `insert into oauth_codes (code, client_id, redirect_uri, code_challenge, code_challenge_method, scope, expires_at)
@@ -158,15 +159,18 @@ export async function exchangeAuthorizationCode(payload: {
   return { access_token: token, token_type: "Bearer", expires_in: 3600 };
 }
 
-async function requireValidAccessToken(token: string): Promise<void> {
+async function requireValidAccessToken(token: string): Promise<{ clientId: string; platformInstanceId: string | null }> {
   const tokenHash = sha256Hex(token);
   const result = await getPool().query(
-    "select 1 from oauth_tokens where access_token_hash = $1 and revoked_at is null and expires_at > now() limit 1",
+    `select t.client_id, c.platform_instance_id from oauth_tokens t
+      join oauth_clients c on c.client_id=t.client_id
+      where t.access_token_hash = $1 and t.revoked_at is null and t.expires_at > now() limit 1`,
     [tokenHash],
   );
   if ((result.rowCount ?? 0) === 0) {
     throw new Error("invalid_token");
   }
+  return { clientId: String(result.rows[0].client_id), platformInstanceId: result.rows[0].platform_instance_id ? String(result.rows[0].platform_instance_id) : null };
 }
 
 export async function issueLicense(payload: {
@@ -180,94 +184,49 @@ export async function issueLicense(payload: {
   features?: Record<string, unknown>;
   limits?: Record<string, unknown>;
 }) {
-  await requireValidAccessToken(payload.access_token);
-  const cfg = loadConfig();
-  const now = nowUnix();
-  const exp = now + Math.max(1, payload.term_days ?? 365) * 86400;
-  const jti = `lic_${randomUUID().replace(/-/g, "")}`;
-  const aud =
-    payload.license_mode === "portable"
-      ? ["*"]
-      : [payload.platform_instance_id && payload.platform_instance_id.startsWith("hcpi_") ? payload.platform_instance_id : `hcpi_${payload.platform_instance_id ?? ""}`];
-
-  const privateJwk = JSON.parse(cfg.AUTHOR_PRIVATE_JWK_JSON) as JWK;
-  const signingKey = await importJWK(privateJwk, "EdDSA");
-  const licenseJws = await new SignJWT({
-    typ: "hc-license",
-    v: 1,
-    subject: { scope_type: "tenant", tenant_id: payload.tenant_id },
-    app: { app_id: payload.app_id },
-    license_mode: payload.license_mode,
-    features: payload.features ?? {},
-    limits: payload.limits ?? {},
-  })
-    .setProtectedHeader({ alg: "EdDSA", kid: privateJwk.kid })
-    .setIssuer(cfg.AUTHOR_ID)
-    .setJti(jti)
-    .setAudience(aud)
-    .setIssuedAt(now)
-    .setNotBefore(now)
-    .setExpirationTime(exp)
-    .sign(signingKey);
-
-  await getPool().query(
-    `insert into license_grants (
-      jti,
-      author_id,
-      tenant_id,
-      platform_instance_id,
-      app_id,
-      license_mode,
-      license_jws,
-      issued_at,
-      not_before,
-      expires_at,
-      status,
-      customer_ref,
-      features_json,
-      limits_json
-    )
-    values ($1,$2,$3,$4,$5,$6,$7,to_timestamp($8),to_timestamp($9),to_timestamp($10),'active',$11,$12::jsonb,$13::jsonb)`,
-    [
-      jti,
-      cfg.AUTHOR_ID,
-      payload.tenant_id,
-      payload.platform_instance_id ?? null,
-      payload.app_id,
-      payload.license_mode,
-      licenseJws,
-      now,
-      now,
-      exp,
-      payload.customer_ref ?? null,
-      JSON.stringify(payload.features ?? {}),
-      JSON.stringify(payload.limits ?? {}),
-    ],
+  const token = await requireValidAccessToken(payload.access_token);
+  const platformInstanceId = payload.platform_instance_id ?? token.platformInstanceId;
+  const pool = getPool();
+  const approved = await pool.query(
+    `select activation_id, owner_tenant_id from activation_requests
+      where tenant_id=$1 and app_id=$2 and license_mode=$3
+        and platform_instance_id is not distinct from $4 and status='approved'
+      order by decided_at asc limit 1`,
+    [payload.tenant_id, payload.app_id, payload.license_mode, platformInstanceId],
   );
-
-  const bundle = {
-    bundle_typ: "hc-license-bundle",
-    v: 1,
-    license_jws: licenseJws,
-    author_cert_jws: cfg.AUTHOR_CERT_JWS,
-    root_kid: "root_2026_01",
-  };
-
-  return {
-    license_jws: licenseJws,
-    author_cert_jws: cfg.AUTHOR_CERT_JWS,
-    bundle,
-  };
+  if (approved.rowCount) {
+    return issueApprovedActivation(String(approved.rows[0].owner_tenant_id), String(approved.rows[0].activation_id));
+  }
+  const grant = await pool.query(
+    `select g.grant_id, g.owner_tenant_id, i.instance_id from core_instances i
+      join commercial_grants g on g.customer_id=i.customer_id and g.status='active'
+      join products p on p.product_id=g.product_id and p.app_id=$2 and p.status='active'
+      where i.platform_instance_id=$1 and i.revoked_at is null
+        and g.valid_from <= now() and (g.valid_until is null or g.valid_until > now())
+      order by g.created_at asc limit 1`,
+    [platformInstanceId, payload.app_id],
+  );
+  if (!grant.rowCount) {
+    throw Object.assign(new Error("No active grant matches this Core instance and application"), { statusCode: 403 });
+  }
+  const row = grant.rows[0];
+  const activation = await createActivation(String(row.owner_tenant_id), {
+    grant_id: row.grant_id, instance_id: row.instance_id, platform_instance_id: platformInstanceId,
+    tenant_id: payload.tenant_id, app_id: payload.app_id, license_mode: payload.license_mode,
+    oauth_client_id: token.clientId,
+  }, "online");
+  throw Object.assign(new Error("Activation approval is pending"), { statusCode: 409, activationId: activation.activation_id });
 }
 
 export async function listMigrationManifests(): Promise<Array<{ id: string; sha256: string }>> {
-  const migrationPath = path.resolve(__dirname, "db", "migrations", "001_init.sql");
-  const sql = await readFile(migrationPath, "utf8");
-  return [{ id: "001_init", sha256: sha256Hex(sql) }];
+  return Promise.all(["001_init", "002_management"].map(async (id) => {
+    const sql = await readFile(path.resolve(__dirname, "db", "migrations", `${id}.sql`), "utf8");
+    return { id, sha256: sha256Hex(sql) };
+  }));
 }
 
 export async function getMigrationSqlById(id: string): Promise<string | null> {
-  if (id !== "001_init") {
+  if (id !== "001_init" && id !== "002_management") {
     return null;
   }
   const migrationPath = path.resolve(__dirname, "db", "migrations", "001_init.sql");

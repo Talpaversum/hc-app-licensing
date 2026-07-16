@@ -1,0 +1,11 @@
+{
+  "nav.dashboard": "Dashboard",
+  "nav.products": "Products",
+  "nav.customers": "Customers",
+  "nav.instances": "Core instances",
+  "nav.grants": "License grants",
+  "nav.activations": "Activations",
+  "nav.licenses": "Issued licenses",
+  "nav.security": "Security",
+  "nav.audit": "Audit"
+}

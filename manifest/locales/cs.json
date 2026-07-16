@@ -1,0 +1,11 @@
+{
+  "nav.dashboard": "Přehled",
+  "nav.products": "Produkty",
+  "nav.customers": "Zákazníci",
+  "nav.instances": "Instance Core",
+  "nav.grants": "Licenční granty",
+  "nav.activations": "Aktivace",
+  "nav.licenses": "Vydané licence",
+  "nav.security": "Zabezpečení",
+  "nav.audit": "Audit"
+}

@@ -25,9 +25,11 @@ services:
         RUN npm ci
 
         FROM deps AS build
-        COPY tsconfig.json ./
+        COPY tsconfig.json vite.config.ts ./
         COPY src ./src
+        COPY manifest ./manifest
         RUN npm run build
+        RUN npm run build:plugin
 
         FROM node:22-bookworm-slim AS runtime
         WORKDIR /app
@@ -35,6 +37,8 @@ services:
         COPY package*.json ./
         RUN npm ci --omit=dev && npm cache clean --force
         COPY --from=build /app/dist ./dist
+        COPY --from=build /app/dist-plugin ./dist-plugin
+        COPY --from=build /app/manifest ./manifest
         COPY --from=build /app/src/db/migrations ./dist/src/db/migrations
         EXPOSE 4030
         CMD ["sh", "-c", "node dist/src/db/migrate.js && node dist/src/server.js"]
@@ -47,9 +51,14 @@ services:
       AUTHOR_ID: ${AUTHOR_ID:?AUTHOR_ID is required}
       AUTHOR_PRIVATE_JWK_JSON: ${AUTHOR_PRIVATE_JWK_JSON:?AUTHOR_PRIVATE_JWK_JSON is required}
       AUTHOR_CERT_JWS: ${AUTHOR_CERT_JWS:?AUTHOR_CERT_JWS is required}
+      AUTHOR_REGISTRY_ROOT_JWKS_JSON: ${AUTHOR_REGISTRY_ROOT_JWKS_JSON:-{"keys":[]}}
+      AUTHOR_REGISTRY_ISSUER: ${AUTHOR_REGISTRY_ISSUER:-hc-author-registry}
       DCR_TRUSTED_CORE_JWKS_JSON: ${DCR_TRUSTED_CORE_JWKS_JSON:?DCR_TRUSTED_CORE_JWKS_JSON is required}
       INSTALLATION_TOKEN_SECRET: ${INSTALLATION_TOKEN_SECRET:-installersecretinstallersecret}
       INSTALLATION_TOKEN_ISSUER: ${INSTALLATION_TOKEN_ISSUER:-hekatoncheiros-core-installer}
+      APP_ID: ${APP_ID:-talpaversum/licensing}
+      CORE_DELEGATION_JWKS_JSON: ${CORE_DELEGATION_JWKS_JSON:-{"keys":[{"crv":"Ed25519","x":"yX9arOMjShM8hvqmwg7B1abzkyAQYyfYPieQaTIh5Lk","kty":"OKP","kid":"core-delegation-dev-1"}]}}
+      CORE_JWT_ISSUER: ${CORE_JWT_ISSUER:-hekatoncheiros-core}
     depends_on:
       postgres:
         condition: service_healthy
