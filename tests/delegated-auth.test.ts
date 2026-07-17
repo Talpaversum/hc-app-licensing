@@ -10,6 +10,7 @@ describe("delegated issuer authorization", () => {
     process.env.AUTHOR_ID = "talpaversum";
     process.env.AUTHOR_PRIVATE_JWK_JSON = "{}";
     process.env.AUTHOR_CERT_JWS = "certificate-placeholder";
+    process.env.AUTHOR_REGISTRY_ID = "hekatoncheiros-test";
     process.env.DCR_TRUSTED_CORE_JWKS_JSON = '{"keys":[]}';
     process.env.CORE_DELEGATION_JWKS_JSON = '{"keys":[{"crv":"Ed25519","x":"yX9arOMjShM8hvqmwg7B1abzkyAQYyfYPieQaTIh5Lk","kty":"OKP","kid":"core-delegation-dev-1"}]}';
     process.env.CORE_JWT_ISSUER = "hekatoncheiros-core";

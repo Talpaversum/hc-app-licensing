@@ -4,6 +4,7 @@ import { SignJWT, createLocalJWKSet, decodeJwt, decodeProtectedHeader, importJWK
 
 import { loadConfig } from "./config.js";
 import { getPool } from "./db/pool.js";
+import { verifyAuthorCertificate, verifyLicenseJwsAgainstAuthorCertificate } from "./issuer-identity.js";
 
 const id = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, "")}`;
 
@@ -35,16 +36,12 @@ export async function activeAuthorCertificate() {
 
 export async function importAuthorCertificate(authorCertJws: string) {
   const cfg = loadConfig();
-  let claims;
   try {
-    ({ payload: claims } = await jwtVerify(authorCertJws, createLocalJWKSet(JSON.parse(cfg.AUTHOR_REGISTRY_ROOT_JWKS_JSON) as JSONWebKeySet), { issuer: cfg.AUTHOR_REGISTRY_ISSUER }));
-  } catch {
-    throw Object.assign(new Error("Author certificate is not signed by the configured registry root"), { statusCode: 400 });
+    await verifyAuthorCertificate(authorCertJws, cfg);
+  } catch (error) {
+    throw Object.assign(error instanceof Error ? error : new Error("Invalid author certificate"), { statusCode: 400 });
   }
   const header = decodeProtectedHeader(authorCertJws);
-  if (claims["typ"] !== "hc-author-cert" || claims.sub !== cfg.AUTHOR_ID) {
-    throw Object.assign(new Error("Certificate does not belong to the configured author"), { statusCode: 400 });
-  }
   const client = await getPool().connect();
   try {
     await client.query("begin");
@@ -241,6 +238,7 @@ export async function issueApprovedActivation(tenantId: string, activationId: st
     .setIssuer(cfg.AUTHOR_ID).setJti(jti).setAudience(aud).setIssuedAt(now).setNotBefore(now)
     .setExpirationTime(configuredExpiration).sign(key);
   const authorCertJws = await activeAuthorCertificate();
+  await verifyLicenseJwsAgainstAuthorCertificate(licenseJws, authorCertJws, cfg);
   const bundle = { bundle_typ: "hc-license-bundle", v: 1, license_jws: licenseJws, author_cert_jws: authorCertJws };
   const client = await getPool().connect();
   try {

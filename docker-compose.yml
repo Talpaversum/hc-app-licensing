@@ -48,16 +48,18 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://hc_licensing:hc_licensing_password@postgres:5432/hc_app_licensing}
       ISSUER_BASE_URL: ${ISSUER_BASE_URL:-http://localhost:4030}
       BACKCHANNEL_BASE_URL: ${BACKCHANNEL_BASE_URL:-http://host.docker.internal:4030}
+      ISSUER_IDENTITY_MODE: ${ISSUER_IDENTITY_MODE:-production}
       AUTHOR_ID: ${AUTHOR_ID:?AUTHOR_ID is required}
       AUTHOR_PRIVATE_JWK_JSON: ${AUTHOR_PRIVATE_JWK_JSON:?AUTHOR_PRIVATE_JWK_JSON is required}
       AUTHOR_CERT_JWS: ${AUTHOR_CERT_JWS:?AUTHOR_CERT_JWS is required}
-      AUTHOR_REGISTRY_ROOT_JWKS_JSON: ${AUTHOR_REGISTRY_ROOT_JWKS_JSON:-{"keys":[]}}
+      AUTHOR_REGISTRY_ROOT_JWKS_JSON: ${AUTHOR_REGISTRY_ROOT_JWKS_JSON:?AUTHOR_REGISTRY_ROOT_JWKS_JSON is required}
+      AUTHOR_REGISTRY_ID: ${AUTHOR_REGISTRY_ID:?AUTHOR_REGISTRY_ID is required}
       AUTHOR_REGISTRY_ISSUER: ${AUTHOR_REGISTRY_ISSUER:-hc-author-registry}
       DCR_TRUSTED_CORE_JWKS_JSON: ${DCR_TRUSTED_CORE_JWKS_JSON:?DCR_TRUSTED_CORE_JWKS_JSON is required}
-      INSTALLATION_TOKEN_SECRET: ${INSTALLATION_TOKEN_SECRET:-installersecretinstallersecret}
+      INSTALLATION_TOKEN_SECRET: ${INSTALLATION_TOKEN_SECRET:?INSTALLATION_TOKEN_SECRET is required}
       INSTALLATION_TOKEN_ISSUER: ${INSTALLATION_TOKEN_ISSUER:-hekatoncheiros-core-installer}
       APP_ID: ${APP_ID:-talpaversum/licensing}
-      CORE_DELEGATION_JWKS_JSON: ${CORE_DELEGATION_JWKS_JSON:-{"keys":[{"crv":"Ed25519","x":"yX9arOMjShM8hvqmwg7B1abzkyAQYyfYPieQaTIh5Lk","kty":"OKP","kid":"core-delegation-dev-1"}]}}
+      CORE_DELEGATION_JWKS_JSON: ${CORE_DELEGATION_JWKS_JSON:?CORE_DELEGATION_JWKS_JSON is required}
       CORE_JWT_ISSUER: ${CORE_JWT_ISSUER:-hekatoncheiros-core}
     depends_on:
       postgres:

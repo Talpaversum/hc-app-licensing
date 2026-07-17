@@ -30,6 +30,8 @@ The issuer needs:
 - `AUTHOR_ID`: the author namespace, for example `talpaversum`
 - `AUTHOR_PRIVATE_JWK_JSON`: private signing key for licenses
 - `AUTHOR_CERT_JWS`: root-signed author certificate issued by `hc-author-registry`
+- `AUTHOR_REGISTRY_ROOT_JWKS_JSON`: explicitly trusted Registry public root keys
+- `AUTHOR_REGISTRY_ID`: the expected Registry identity bound into the certificate
 - `DCR_TRUSTED_CORE_JWKS_JSON`: public key set trusted for Core software statements
 
 Core needs the matching trust material:
@@ -41,16 +43,25 @@ Core needs the matching trust material:
 
 ## Development Material
 
-For local development only:
+Issuer identity is validated before the HTTP server starts. The configured
+author certificate must chain to the trusted Registry root, carry the expected
+Registry and author identities, and certify the public half of the issuer's
+private signing key. The issuer also verifies every newly issued license against
+that chain before storing it.
+
+For local development, generate the chain from the Registry repository:
 
 ```bash
-npm run dev:material -- --author-id=talpaversum --issuer-base-url=http://localhost:4030
+cd ../hc-author-registry
+npm run pki:bootstrap:dev -- --author-id=talpaversum
 ```
 
-Copy the `hc-app-licensing` section into `hc-app-licensing/.env`.
-Copy the `hekatoncheiros-core` section into `hekatoncheiros-core/.env`.
+Use the generated `.local/dev-pki/issuer.env` fields in the local issuer
+environment. They are explicitly marked as development material and cannot be
+used when `ISSUER_IDENTITY_MODE=production`.
 
-Do not use generated development material in production.
+The issuer never creates a Registry root. Do not use generated development
+material in production.
 
 ## Local Compose
 

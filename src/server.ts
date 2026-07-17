@@ -5,6 +5,7 @@ import { jwtVerify } from "jose";
 import { z } from "zod";
 
 import { loadConfig } from "./config.js";
+import { validateIssuerIdentity } from "./issuer-identity.js";
 import {
   discoveryMetadata,
   exchangeAuthorizationCode,
@@ -18,6 +19,7 @@ import { registerManagementRoutes } from "./management-routes.js";
 
 const app = Fastify({ logger: true });
 const config = loadConfig();
+await validateIssuerIdentity(config);
 
 app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
   try {
@@ -61,7 +63,7 @@ const issueSchema = z.object({
   customer_ref: z.string().optional(),
 });
 
-app.get("/health", async () => ({ status: "ok" }));
+app.get("/health", async () => ({ status: "ok", identity_mode: config.ISSUER_IDENTITY_MODE }));
 
 app.get("/internal/ui/plugin.js", async (request, reply) => {
   const authHeader = String(request.headers["authorization"] ?? "");
