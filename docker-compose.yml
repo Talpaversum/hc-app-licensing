@@ -47,7 +47,7 @@ services:
       PORT: "4030"
       DATABASE_URL: ${DATABASE_URL:-postgres://hc_licensing:hc_licensing_password@postgres:5432/hc_app_licensing}
       ISSUER_BASE_URL: ${ISSUER_BASE_URL:-http://localhost:4030}
-      BACKCHANNEL_BASE_URL: ${BACKCHANNEL_BASE_URL:-http://host.docker.internal:4030}
+      BACKCHANNEL_BASE_URL: ${BACKCHANNEL_BASE_URL:-http://licensing:4030}
       ISSUER_IDENTITY_MODE: ${ISSUER_IDENTITY_MODE:-production}
       AUTHOR_ID: ${AUTHOR_ID:?AUTHOR_ID is required}
       AUTHOR_PRIVATE_JWK_JSON: ${AUTHOR_PRIVATE_JWK_JSON:?AUTHOR_PRIVATE_JWK_JSON is required}
@@ -66,6 +66,10 @@ services:
         condition: service_healthy
     ports:
       - "${LICENSING_PUBLISHED_PORT:-4030}:4030"
+    networks:
+      default:
+      core:
+        aliases: [licensing]
     healthcheck:
       test:
         [
@@ -80,3 +84,8 @@ services:
 
 volumes:
   licensing_postgres_data:
+
+networks:
+  core:
+    external: true
+    name: hekatoncheiros-core_default
