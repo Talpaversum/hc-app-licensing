@@ -111,6 +111,8 @@ function createPage(
   view: View,
   context: AppContext,
 ): ComponentType<Record<string, never>> {
+  const authorId = new URLSearchParams(window.location.search).get("authorId");
+  const adminRoot = authorId ? `/v1/admin/authors/${encodeURIComponent(authorId)}` : "/v1/admin";
   return function LicensingView() {
     const lang = context.localization?.locale === "cs" ? "cs" : "en";
     const t = messages[lang];
@@ -124,10 +126,10 @@ function createPage(
       setError("");
       try {
         if (view === "dashboard" || view === "security")
-          setSummary(await context.api.request<Row>("/v1/admin/dashboard"));
+          setSummary(await context.api.request<Row>(`${adminRoot}/dashboard`));
         else
           setData(
-            (await context.api.request<{ items: Row[] }>(`/v1/admin/${view}`))
+            (await context.api.request<{ items: Row[] }>(`${adminRoot}/${view}`))
               .items,
           );
       } catch (e) {
@@ -171,7 +173,7 @@ function createPage(
       const values = Object.fromEntries(new FormData(e.currentTarget));
       if (view === "grants")
         Object.assign(values, { status: "active", offline_allowed: true });
-      await act(`/v1/admin/${view}`, values);
+      await act(`${adminRoot}/${view}`, values);
       setForm(false);
     };
     if (view === "dashboard")
@@ -219,7 +221,7 @@ function createPage(
             className="editor"
             onSubmit={async (e) => {
               e.preventDefault();
-              await act("/v1/admin/security/certificate", {
+              await act(`${adminRoot}/security/certificate`, {
                 author_cert_jws: String(
                   new FormData(e.currentTarget).get("certificate"),
                 ),
@@ -266,7 +268,7 @@ function createPage(
                 e.preventDefault();
                 try {
                   await act(
-                    "/v1/admin/activations/offline",
+                    `${adminRoot}/activations/offline`,
                     JSON.parse(
                       String(new FormData(e.currentTarget).get("request")),
                     ),
@@ -350,7 +352,7 @@ function createPage(
                     <>
                       <button
                         onClick={() =>
-                          act(`/v1/admin/activations/${rid}/decision`, {
+                          act(`${adminRoot}/activations/${rid}/decision`, {
                             approved: true,
                           })
                         }
@@ -359,7 +361,7 @@ function createPage(
                       </button>
                       <button
                         onClick={() =>
-                          act(`/v1/admin/activations/${rid}/decision`, {
+                          act(`${adminRoot}/activations/${rid}/decision`, {
                             approved: false,
                           })
                         }
@@ -370,24 +372,24 @@ function createPage(
                   )}
                   {view === "activations" && row["status"] === "approved" && (
                     <button
-                      onClick={() => act(`/v1/admin/activations/${rid}/issue`)}
+                      onClick={() => act(`${adminRoot}/activations/${rid}/issue`)}
                     >
                       {t.issue}
                     </button>
                   )}
                   {view === "licenses" && row["status"] === "active" && (
                     <>
-                      <button onClick={() => act(`/v1/admin/licenses/${rid}/renew`)}>{t.renew}</button>
-                      <button onClick={() => act(`/v1/admin/licenses/${rid}/status`, { status: "revoked", reason: "Revoked by operator" })}>{t.revoke}</button>
+                      <button onClick={() => act(`${adminRoot}/licenses/${rid}/renew`)}>{t.renew}</button>
+                      <button onClick={() => act(`${adminRoot}/licenses/${rid}/status`, { status: "revoked", reason: "Revoked by operator" })}>{t.revoke}</button>
                     </>
                   )}
                   {view === "grants" && (
-                    <button onClick={() => act(`/v1/admin/grants/${rid}/status`, { status: row["status"] === "active" ? "suspended" : "active" })}>
+                    <button onClick={() => act(`${adminRoot}/grants/${rid}/status`, { status: row["status"] === "active" ? "suspended" : "active" })}>
                       {row["status"] === "active" ? t.suspend : t.activate}
                     </button>
                   )}
                   {view === "instances" && !row["revoked_at"] && (
-                    <button onClick={() => act(`/v1/admin/instances/${rid}/revoke`)}>{t.revoke}</button>
+                    <button onClick={() => act(`${adminRoot}/instances/${rid}/revoke`)}>{t.revoke}</button>
                   )}
                 </span>
               </div>
@@ -414,6 +416,8 @@ export function register(context: AppContext) {
     "security",
     "audit",
   ];
+  const authorId = new URLSearchParams(window.location.search).get("authorId");
+  const authorQuery = authorId ? `?authorId=${encodeURIComponent(authorId)}` : "";
   return {
     routes: views.map((view) => ({
       path: view === "dashboard" ? "" : view,
@@ -421,7 +425,7 @@ export function register(context: AppContext) {
     })),
     nav_entries: views.map((view) => ({
       label: t[view],
-      path: `/app/licensing${view === "dashboard" ? "" : `/${view}`}`,
+      path: `/app/licensing${view === "dashboard" ? "" : `/${view}`}${authorQuery}`,
     })),
     dashboard_widgets: [],
   };

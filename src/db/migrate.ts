@@ -33,13 +33,16 @@ async function run() {
   await ensureDatabaseExists();
 
   const pool = getPool();
+  const client = await pool.connect();
   try {
-    for (const migration of ["001_init.sql", "002_management.sql"]) {
+    await client.query("select set_config('hc.author_id', $1, false)", [loadConfig().AUTHOR_ID]);
+    for (const migration of ["001_init.sql", "002_management.sql", "003_author_scope.sql"]) {
       const sql = await readFile(path.resolve(__dirname, "migrations", migration), "utf8");
-      await pool.query(sql);
+      await client.query(sql);
     }
     console.log("hc-app-licensing migrations applied");
   } finally {
+    client.release();
     await pool.end();
   }
 }

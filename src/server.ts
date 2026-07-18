@@ -5,7 +5,7 @@ import { jwtVerify } from "jose";
 import { z } from "zod";
 
 import { loadConfig } from "./config.js";
-import { validateIssuerIdentity } from "./issuer-identity.js";
+import { validateSigningKeyProvider } from "./signing-key-provider.js";
 import {
   discoveryMetadata,
   exchangeAuthorizationCode,
@@ -19,7 +19,7 @@ import { registerManagementRoutes } from "./management-routes.js";
 
 const app = Fastify({ logger: true });
 const config = loadConfig();
-await validateIssuerIdentity(config);
+await validateSigningKeyProvider(config);
 
 app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
   try {
@@ -53,6 +53,7 @@ const tokenSchema = z.object({
 });
 
 const issueSchema = z.object({
+  author_id: z.string().min(3).optional(),
   tenant_id: z.string().min(1),
   app_id: z.string().min(3),
   license_mode: z.enum(["portable", "instance_bound"]),
@@ -63,7 +64,7 @@ const issueSchema = z.object({
   customer_ref: z.string().optional(),
 });
 
-app.get("/health", async () => ({ status: "ok", identity_mode: config.ISSUER_IDENTITY_MODE }));
+app.get("/health", async () => ({ status: "ok", identity_mode: config.ISSUER_IDENTITY_MODE, operation_mode: config.ISSUER_OPERATION_MODE }));
 
 app.get("/internal/ui/plugin.js", async (request, reply) => {
   const authHeader = String(request.headers["authorization"] ?? "");
@@ -148,8 +149,11 @@ app.post("/v1/licenses/issue", async (request) => {
   }
 
   const payload = issueSchema.parse(request.body ?? {});
+  const authorId = config.ISSUER_OPERATION_MODE === "single_author" ? config.AUTHOR_ID : payload.author_id;
+  if (!authorId) throw Object.assign(new Error("author_id is required in managed_multi_author mode"), { statusCode: 400 });
   return issueLicense({
     access_token: token,
+    author_id: authorId,
     ...payload,
   });
 });

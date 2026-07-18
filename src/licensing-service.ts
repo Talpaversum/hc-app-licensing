@@ -175,6 +175,7 @@ async function requireValidAccessToken(token: string): Promise<{ clientId: strin
 
 export async function issueLicense(payload: {
   access_token: string;
+  author_id: string;
   tenant_id: string;
   app_id: string;
   license_mode: "portable" | "instance_bound";
@@ -189,28 +190,28 @@ export async function issueLicense(payload: {
   const pool = getPool();
   const approved = await pool.query(
     `select activation_id, owner_tenant_id from activation_requests
-      where tenant_id=$1 and app_id=$2 and license_mode=$3
-        and platform_instance_id is not distinct from $4 and status='approved'
+      where author_id=$1 and tenant_id=$2 and app_id=$3 and license_mode=$4
+        and platform_instance_id is not distinct from $5 and status='approved'
       order by decided_at asc limit 1`,
-    [payload.tenant_id, payload.app_id, payload.license_mode, platformInstanceId],
+    [payload.author_id, payload.tenant_id, payload.app_id, payload.license_mode, platformInstanceId],
   );
   if (approved.rowCount) {
-    return issueApprovedActivation(String(approved.rows[0].owner_tenant_id), String(approved.rows[0].activation_id));
+    return issueApprovedActivation(payload.author_id, String(approved.rows[0].owner_tenant_id), String(approved.rows[0].activation_id));
   }
   const grant = await pool.query(
     `select g.grant_id, g.owner_tenant_id, i.instance_id from core_instances i
       join commercial_grants g on g.customer_id=i.customer_id and g.status='active'
-      join products p on p.product_id=g.product_id and p.app_id=$2 and p.status='active'
-      where i.platform_instance_id=$1 and i.revoked_at is null
+      join products p on p.product_id=g.product_id and p.app_id=$3 and p.status='active'
+      where i.author_id=$1 and g.author_id=$1 and p.author_id=$1 and i.platform_instance_id=$2 and i.revoked_at is null
         and g.valid_from <= now() and (g.valid_until is null or g.valid_until > now())
       order by g.created_at asc limit 1`,
-    [platformInstanceId, payload.app_id],
+    [payload.author_id, platformInstanceId, payload.app_id],
   );
   if (!grant.rowCount) {
     throw Object.assign(new Error("No active grant matches this Core instance and application"), { statusCode: 403 });
   }
   const row = grant.rows[0];
-  const activation = await createActivation(String(row.owner_tenant_id), {
+  const activation = await createActivation(payload.author_id, String(row.owner_tenant_id), {
     grant_id: row.grant_id, instance_id: row.instance_id, platform_instance_id: platformInstanceId,
     tenant_id: payload.tenant_id, app_id: payload.app_id, license_mode: payload.license_mode,
     oauth_client_id: token.clientId,
@@ -219,14 +220,14 @@ export async function issueLicense(payload: {
 }
 
 export async function listMigrationManifests(): Promise<Array<{ id: string; sha256: string }>> {
-  return Promise.all(["001_init", "002_management"].map(async (id) => {
+  return Promise.all(["001_init", "002_management", "003_author_scope"].map(async (id) => {
     const sql = await readFile(path.resolve(__dirname, "db", "migrations", `${id}.sql`), "utf8");
     return { id, sha256: sha256Hex(sql) };
   }));
 }
 
 export async function getMigrationSqlById(id: string): Promise<string | null> {
-  if (id !== "001_init" && id !== "002_management") {
+  if (id !== "001_init" && id !== "002_management" && id !== "003_author_scope") {
     return null;
   }
   const migrationPath = path.resolve(__dirname, "db", "migrations", "001_init.sql");

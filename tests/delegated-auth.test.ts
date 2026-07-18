@@ -20,7 +20,27 @@ describe("delegated issuer authorization", () => {
       .setProtectedHeader({ alg: "EdDSA", kid: "core-delegation-dev-1" }).setSubject("usr_admin").setIssuer("hekatoncheiros-core")
       .setAudience("hc-app:talpaversum/licensing").setIssuedAt().setExpirationTime("1m")
       .sign(signingKey);
-    const user = await requireDelegatedUser({ id: "fallback", ip: "127.0.0.1", headers: { "x-hc-user-delegation": token } } as never, "licensing.products.manage");
+    const user = await requireDelegatedUser(
+      { id: "fallback", ip: "127.0.0.1", headers: { "x-hc-user-delegation": token } } as never,
+      "licensing.products.manage",
+      "talpaversum",
+      "author.licensing.manage",
+    );
     expect(user).toMatchObject({ userId: "usr_admin", tenantId: "tnt_default", username: "admin@example.com" });
+  });
+
+  it("rejects a managed request outside the delegated author scope", async () => {
+    process.env.ISSUER_OPERATION_MODE = "managed_multi_author";
+    const signingKey = await importJWK({ crv: "Ed25519", d: "2zZRDOPRk5kGWJ77q4781dtzvZ6epsJfQpzvPHD7mwU", x: "yX9arOMjShM8hvqmwg7B1abzkyAQYyfYPieQaTIh5Lk", kty: "OKP", kid: "core-delegation-dev-1" }, "EdDSA");
+    const token = await new SignJWT({ typ: "hc-user-delegation", tenant_id: "tnt_default", author_id: "author-a", author_permissions: ["author.licensing.manage"] })
+      .setProtectedHeader({ alg: "EdDSA", kid: "core-delegation-dev-1" }).setSubject("usr_admin").setIssuer("hekatoncheiros-core")
+      .setAudience("hc-app:talpaversum/licensing").setIssuedAt().setExpirationTime("1m").sign(signingKey);
+    await expect(requireDelegatedUser(
+      { id: "fallback", ip: "127.0.0.1", headers: { "x-hc-user-delegation": token } } as never,
+      "licensing.products.manage",
+      "author-b",
+      "author.licensing.manage",
+    )).rejects.toMatchObject({ statusCode: 403 });
+    process.env.ISSUER_OPERATION_MODE = "single_author";
   });
 });

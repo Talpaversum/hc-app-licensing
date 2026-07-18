@@ -2,7 +2,12 @@
 
 ## Author isolation
 
-One issuer deployment represents exactly one configured `AUTHOR_ID` and one signing identity. It is not a shared multi-author issuer. Tenant-owned products, customers, instances, grants, activations, licenses, and audit rows are isolated by `owner_tenant_id`; every management query supplies that scope. A hosted multi-author service must deploy separate issuer namespaces (database/schema and signing identity) per author or add a dedicated author-scoped tenancy layer before sharing a database.
+The issuer has two explicit operation modes:
+
+- `ISSUER_OPERATION_MODE=single_author` serves one self-hosted author from `AUTHOR_ID`, `AUTHOR_PRIVATE_JWK_JSON`, and `AUTHOR_CERT_JWS`. Its management API remains under `/v1/admin/*`.
+- `ISSUER_OPERATION_MODE=managed_multi_author` serves hosted authors under `/v1/admin/authors/:authorId/*`. Every management row and query is scoped by both `author_id` and `owner_tenant_id`.
+
+Managed Core delegations must contain matching `author_id`, `author_permissions`, tenant and user identity. Platform superadmin access additionally requires the explicit `licensing.authors.manage` operator scope. Set `CORE_SIGNING_KEY_PROVIDER_URL` and `CORE_SIGNING_KEY_PROVIDER_TOKEN` to consume hosted keys created by Core through its internal service-only contract. `MANAGED_AUTHOR_IDENTITIES_JSON` remains a local/development provider. Private keys are never returned by frontend or management endpoints.
 
 Author-hosted licensing issuer for Hekatoncheiros apps.
 
