@@ -1,5 +1,9 @@
 # hc-app-licensing
 
+## Author isolation
+
+One issuer deployment represents exactly one configured `AUTHOR_ID` and one signing identity. It is not a shared multi-author issuer. Tenant-owned products, customers, instances, grants, activations, licenses, and audit rows are isolated by `owner_tenant_id`; every management query supplies that scope. A hosted multi-author service must deploy separate issuer namespaces (database/schema and signing identity) per author or add a dedicated author-scoped tenancy layer before sharing a database.
+
 Author-hosted licensing issuer for Hekatoncheiros apps.
 
 This installable Hekatoncheiros application issues tenant licenses for apps
